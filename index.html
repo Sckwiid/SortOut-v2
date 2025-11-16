@@ -42,22 +42,78 @@
 </div>
 
 <script>
-const WORKER_BASE = 'https://steam-proxy.sckwiid.workers.dev'; // ✅ ton worker
+const WORKER_BASE = 'https://steam-proxy.sckwiid.workers.dev';
 
 console.log('WORKER_BASE utilisé :', WORKER_BASE);
 
 function escapeHtml(s){return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 
-async function loadRandom(tag, free) {
-  let url = WORKER_BASE + '/random';
-  const params = [];
-  if (tag) params.push('tag=' + encodeURIComponent(tag));
-  if (typeof free === 'boolean') params.push('free=' + (free ? '1' : '0'));
-  if (params.length) url += '?' + params.join('&');
+let catalogCache = null;
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Worker HTTP ' + res.status);
-  return res.json();
+async function loadCatalog() {
+  if (catalogCache) return catalogCache;
+  const res = await fetch(WORKER_BASE + '/catalog');
+  if (!res.ok) throw new Error('Worker /catalog HTTP ' + res.status);
+  const data = await res.json();
+  catalogCache = data.apps || [];
+  return catalogCache;
+}
+
+async function pickRandomGame(tag, freeOnly) {
+  const apps = await loadCatalog();
+  if (!apps.length) throw new Error('Catalogue vide');
+
+  let last = null;
+
+  for (let i = 0; i < 40; i++) {
+    const a = apps[Math.floor(Math.random() * apps.length)];
+    if (!a || !a.appid) continue;
+    last = a;
+
+    // récupère les détails pour connaître prix + genres
+    const detRes = await fetch(`${WORKER_BASE}/appdetails?appid=${a.appid}`);
+    if (!detRes.ok) continue;
+    const det = await detRes.json();
+
+    const obj = det[a.appid] && det[a.appid].data ? det[a.appid].data : (det.data || null);
+    if (!obj) continue;
+
+    // filtre gratuit/payant
+    if (typeof freeOnly === 'boolean') {
+      const isFree = !!obj.is_free || (obj.price_overview && obj.price_overview.final === 0);
+      if (freeOnly && !isFree) continue;
+      if (!freeOnly && isFree) continue;
+    }
+
+    // filtre tag (horreur…)
+    if (tag) {
+      const lcTag = tag.toLowerCase();
+      let matched = false;
+      if (obj.genres) {
+        matched = obj.genres.some(g => (g.description || '').toLowerCase().includes(lcTag));
+      }
+      if (!matched && obj.categories) {
+        matched = obj.categories.some(c => (c.description || '').toLowerCase().includes(lcTag));
+      }
+      if (!matched) continue;
+    }
+
+    // trouvé
+    return { appid: a.appid, name: obj.name, details: obj };
+  }
+
+  // fallback : dernier tiré, sans garantie de tag/gratuit
+  if (last) {
+    return { appid: last.appid, name: last.name || ('App ' + last.appid), details: null };
+  }
+  throw new Error('Impossible de trouver un jeu correspondant');
+}
+
+function formatPrice(details) {
+  if (!details) return 'Prix non disponible';
+  if (details.is_free) return 'Gratuit';
+  if (details.price_overview) return (details.price_overview.final / 100).toFixed(2) + ' €';
+  return 'Payant';
 }
 
 async function renderCard(cardSelector, tag) {
@@ -68,37 +124,16 @@ async function renderCard(cardSelector, tag) {
   content.textContent = 'Chargement…';
 
   try {
-    const data = await loadRandom(tag, freeOnly);
-    const appid = data.appid || (data.fallback && data.fallback.appid);
-    const name = data.name || (data.fallback && data.fallback.name) || 'Jeu inconnu';
-
-    if (!appid) {
-      content.textContent = 'Aucun résultat.';
-      return;
-    }
-
-    let priceText = 'Prix non disponible';
-    try {
-      const detRes = await fetch(`${WORKER_BASE}/appdetails?appid=${appid}`);
-      if (detRes.ok) {
-        const det = await detRes.json();
-        const obj = det[appid] && det[appid].data ? det[appid].data : (det.data || null);
-        if (obj) {
-          if (obj.is_free) priceText = 'Gratuit';
-          else if (obj.price_overview) {
-            priceText = (obj.price_overview.final / 100).toFixed(2) + ' €';
-          } else priceText = 'Payant';
-        }
-      }
-    } catch (_) {}
+    const { appid, name, details } = await pickRandomGame(tag, freeOnly);
+    const priceText = formatPrice(details);
 
     content.innerHTML = `
       <p><strong>${escapeHtml(name)}</strong></p>
-      <p><small>${priceText}</small></p>
+      <p><small>${escapeHtml(priceText)}</small></p>
       <p><a href="https://store.steampowered.com/app/${appid}" target="_blank">Voir sur Steam</a></p>
     `;
   } catch (e) {
-    content.innerHTML = `<small>Erreur réseau avec le Worker.<br>${escapeHtml(e.message)}</small>`;
+    content.innerHTML = `<small>Erreur : ${escapeHtml(e.message)}</small>`;
   }
 }
 
