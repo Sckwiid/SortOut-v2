@@ -144,45 +144,46 @@ async function renderCard(cardSelector, mode) {
   const priceText = computePriceText(details);
   const isFree = details && (details.is_free || (details.price_overview && details.price_overview.final === 0));
 
-  // Logo (header_image)
+  // Image header
   let imgHtml = '';
   if (details && details.header_image) {
     imgHtml = `<img class="game-header" src="${details.header_image}" alt="Image de ${escapeHtml(game.name)}">`;
   }
 
-  // Trailer vidéo (première vidéo dispo)
-  let videoHtml = '';
+  // URL trailer (mp4)
+  let trailerUrl = null;
   if (details && details.movies && details.movies.length) {
     const vid = details.movies[0];
-    let mp4 = null;
     if (vid.mp4) {
-      if (vid.mp4.max) mp4 = vid.mp4.max;
+      if (vid.mp4.max) trailerUrl = vid.mp4.max;
       else {
         const keys = Object.keys(vid.mp4);
-        if (keys.length) mp4 = vid.mp4[keys[0]];
+        if (keys.length) trailerUrl = vid.mp4[keys[0]];
       }
-    }
-    if (mp4) {
-      videoHtml = `
-        <video class="game-trailer" controls muted playsinline>
-          <source src="${mp4}" type="video/mp4">
-        </video>`;
     }
   }
 
-  // Si l’utilisateur coche "gratuit seulement" mais que le jeu du jour ne l’est pas,
-  // on garde le même jeu et on l’indique juste.
   let freeNote = '';
   if (freeOnly && !isFree) {
     freeNote = `<br><small>💡 Le jeu du jour n'est pas gratuit aujourd'hui.</small>`;
   }
 
+  const storeUrl = `https://store.steampowered.com/app/${game.appid}`;
+
   content.innerHTML = `
     ${imgHtml}
     <p><strong>${escapeHtml(game.name)}</strong></p>
     <p><small>${escapeHtml(priceText)}</small>${freeNote}</p>
-    ${videoHtml}
-    <p><a href="https://store.steampowered.com/app/${game.appid}" target="_blank">Voir sur Steam</a></p>
+    <div class="card-actions">
+      <a class="btn btn-sm" href="${storeUrl}" target="_blank" rel="noopener noreferrer">
+        Voir sur Steam
+      </a>
+      ${trailerUrl ? `
+        <a class="btn btn-sm btn-outlined" href="${trailerUrl}" target="_blank" rel="noopener noreferrer">
+          Voir le trailer
+        </a>
+      ` : ''}
+    </div>
   `;
 }
 
