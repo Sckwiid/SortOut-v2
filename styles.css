@@ -102,6 +102,19 @@ nav a:hover {
   border: 1px solid var(--primary);
 }
 
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
 .main-actions {
   margin-top: 24px;
   display: flex;
@@ -168,12 +181,4 @@ small {
   width: 100%;
   border-radius: 8px;
   margin-bottom: 8px;
-}
-
-.game-trailer {
-  width: 100%;
-  border-radius: 8px;
-  margin-top: 8px;
-  max-height: 260px;
-  object-fit: cover;
 }
