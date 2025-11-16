@@ -78,6 +78,48 @@ const HORROR_GAMES_POOL = [
 
 function escapeHtml(s){return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 
+/* ---------- Gestion du popup trailer ---------- */
+
+function openTrailer(url, title) {
+  if (!url) return;
+  const modal = document.getElementById('trailer-modal');
+  const video = document.getElementById('modal-video');
+  const titleEl = document.getElementById('modal-title');
+
+  titleEl.textContent = 'Trailer — ' + (title || '');
+  video.src = url;
+  video.currentTime = 0;
+  video.play().catch(() => {});
+
+  modal.classList.remove('hidden');
+}
+
+function closeTrailer() {
+  const modal = document.getElementById('trailer-modal');
+  const video = document.getElementById('modal-video');
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+  modal.classList.add('hidden');
+}
+
+function setupModalHandlers() {
+  const modal = document.getElementById('trailer-modal');
+  const backdrop = modal.querySelector('.modal-backdrop');
+  const closeBtn = modal.querySelector('.modal-close');
+
+  backdrop.addEventListener('click', closeTrailer);
+  closeBtn.addEventListener('click', closeTrailer);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+      closeTrailer();
+    }
+  });
+}
+
+/* ---------- Jeu du jour (localStorage) ---------- */
+
 function todayKey() {
   const d = new Date();
   const y = d.getFullYear();
@@ -91,7 +133,6 @@ function pickRandom(pool) {
 }
 
 // Retourne le jeu du jour pour un "mode" (all / horror)
-// stocké dans localStorage, sinon tirage + stockage
 function getDailyGame(mode, pool) {
   const key = `sortout-daily-${mode}`;
   const today = todayKey();
@@ -101,17 +142,13 @@ function getDailyGame(mode, pool) {
     if (stored && stored.date === today && stored.appid) {
       return stored;
     }
-  } catch (e) {
-    // ignore, on repart de zéro
-  }
+  } catch (e) {}
 
   const g = pickRandom(pool);
   const entry = { date: today, appid: g.appid, name: g.name };
   try {
     localStorage.setItem(key, JSON.stringify(entry));
-  } catch (e) {
-    // si localStorage désactivé, tant pis
-  }
+  } catch (e) {}
   return entry;
 }
 
@@ -185,27 +222,32 @@ async function renderCard(cardSelector, mode) {
         Voir sur Steam
       </a>
       ${trailerUrl ? `
-        <a class="btn btn-sm btn-outlined" href="${trailerUrl}" target="_blank" rel="noopener noreferrer">
+        <button class="btn btn-sm btn-outlined btn-trailer" type="button">
           Voir le trailer
-        </a>
+        </button>
       ` : ''}
     </div>
   `;
+
+  // brancher le bouton trailer sur le popup
+  if (trailerUrl) {
+    const btn = content.querySelector('.btn-trailer');
+    if (btn) {
+      btn.addEventListener('click', () => openTrailer(trailerUrl, game.name));
+    }
+  }
 }
 
-// écouteurs
-document.getElementById('refresh-game').addEventListener('click', () =>
-  renderCard('#game-of-day', 'all')
-);
-document.getElementById('refresh-horror').addEventListener('click', () =>
-  renderCard('#horror-of-day', 'horror')
-);
+/* ---------- Init ---------- */
+
+setupModalHandlers();
+
 document.getElementById('show-free').addEventListener('change', () => {
   renderCard('#game-of-day', 'all');
   renderCard('#horror-of-day', 'horror');
 });
 
-// premier affichage
+// Premier affichage
 renderCard('#game-of-day', 'all');
 renderCard('#horror-of-day', 'horror');
 </script>
