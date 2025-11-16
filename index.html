@@ -13,7 +13,6 @@
     <nav>
       <a href="index.html">Accueil</a>
       <a href="tirage.html">Tirage depuis tes jeux Steam</a>
-      <!-- tes autres pages plus tard -->
     </nav>
   </header>
 
@@ -43,14 +42,18 @@
 </div>
 
 <script>
-const WORKER_BASE = 'https://steam-proxy.sckwiid.workers.dev/'; // ⚠️ remplace par ton URL exacte
+const WORKER_BASE = 'https://steam-proxy.sckwiid.workers.dev'; // ✅ ton worker
+
+console.log('WORKER_BASE utilisé :', WORKER_BASE);
 
 function escapeHtml(s){return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 
 async function loadRandom(tag, free) {
-  const url = new URL(WORKER_BASE + '/random');
-  if (tag) url.searchParams.set('tag', tag);
-  if (typeof free === 'boolean') url.searchParams.set('free', free ? '1' : '0');
+  let url = WORKER_BASE + '/random';
+  const params = [];
+  if (tag) params.push('tag=' + encodeURIComponent(tag));
+  if (typeof free === 'boolean') params.push('free=' + (free ? '1' : '0'));
+  if (params.length) url += '?' + params.join('&');
 
   const res = await fetch(url);
   if (!res.ok) throw new Error('Worker HTTP ' + res.status);
@@ -75,7 +78,6 @@ async function renderCard(cardSelector, tag) {
     }
 
     let priceText = 'Prix non disponible';
-
     try {
       const detRes = await fetch(`${WORKER_BASE}/appdetails?appid=${appid}`);
       if (detRes.ok) {
@@ -96,7 +98,7 @@ async function renderCard(cardSelector, tag) {
       <p><a href="https://store.steampowered.com/app/${appid}" target="_blank">Voir sur Steam</a></p>
     `;
   } catch (e) {
-    content.innerHTML = `<small>Erreur réseau avec le Worker. Vérifie l'URL WORKER_BASE.<br>${escapeHtml(e.message)}</small>`;
+    content.innerHTML = `<small>Erreur réseau avec le Worker.<br>${escapeHtml(e.message)}</small>`;
   }
 }
 
