@@ -199,6 +199,13 @@ nav a:hover {
   height: 24px;
 }
 
+.switch-column {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+
 .switch input {
   opacity: 0;
   width: 0;
