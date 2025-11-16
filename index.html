@@ -397,10 +397,8 @@ function matchesQuickFilters(game, selectedCats, coopOnly, soloOnly) {
 
 async function runQuickDraw() {
   const resultEl = document.getElementById('quick-result');
+  const quickCard = document.querySelector('.quick-draw');
   if (!resultEl) return;
-
-  // Scroll automatique vers la zone de résultat
-  resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const selectedCats = getSelectedCategories();
   const coopOnly = document.getElementById('quick-coop-toggle')?.checked || false;
@@ -415,10 +413,21 @@ async function runQuickDraw() {
     resultEl.innerHTML = `<p class="placeholder">
       Aucun jeu ne correspond à ces filtres. Ajoute des catégories ou désactive certains toggles.
     </p>`;
+    if (quickCard) {
+      quickCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     return;
   }
 
+  // on met le message AVANT le scroll
   resultEl.innerHTML = `<p class="placeholder">Recherche d'un jeu compatible avec tes filtres…</p>`;
+
+  // Scroll en douceur vers la carte de tirage rapide
+  if (quickCard) {
+    setTimeout(() => {
+      quickCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
 
   let chosenGame = null;
   let chosenDetails = null;
