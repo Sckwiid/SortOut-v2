@@ -399,6 +399,9 @@ async function runQuickDraw() {
   const resultEl = document.getElementById('quick-result');
   if (!resultEl) return;
 
+  // Scroll automatique vers la zone de résultat
+  resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   const selectedCats = getSelectedCategories();
   const coopOnly = document.getElementById('quick-coop-toggle')?.checked || false;
   const soloOnly = document.getElementById('quick-solo-toggle')?.checked || false;
