@@ -37,6 +37,62 @@
     </div>
   </div>
 
+  <section class="card quick-draw">
+    <h2>🎲 Tirage rapide</h2>
+
+    <div class="quick-controls">
+      <div class="category-selector">
+        <button type="button" class="btn btn-sm" id="quick-category-btn">
+          Catégories ▾
+        </button>
+        <div class="category-menu hidden" id="quick-category-menu">
+          <label class="category-option">
+            <input type="checkbox" value="action" checked>
+            <span>Action</span>
+          </label>
+          <label class="category-option">
+            <input type="checkbox" value="aventure" checked>
+            <span>Aventure</span>
+          </label>
+          <label class="category-option">
+            <input type="checkbox" value="horreur">
+            <span>Horreur</span>
+          </label>
+          <label class="category-option">
+            <input type="checkbox" value="coop">
+            <span>Coop</span>
+          </label>
+          <label class="category-option">
+            <input type="checkbox" value="multijoueur">
+            <span>Multijoueur</span>
+          </label>
+          <label class="category-option">
+            <input type="checkbox" value="solo">
+            <span>Solo</span>
+          </label>
+        </div>
+      </div>
+
+      <label class="switch-field">
+        <span>Gratuit uniquement</span>
+        <div class="switch">
+          <input type="checkbox" id="quick-free-toggle">
+          <span class="switch-slider"></span>
+        </div>
+      </label>
+    </div>
+
+    <div class="quick-actions">
+      <button type="button" class="btn" id="quick-draw-btn">
+        Lancer le tirage
+      </button>
+    </div>
+
+    <div class="quick-result" id="quick-result">
+      <p class="placeholder">Choisis tes catégories puis lance le tirage 🎲</p>
+    </div>
+  </section>
+
   <div class="main-actions">
     <a href="tirage.html" class="btn">🎲 Tirage depuis tes jeux Steam</a>
   </div>
