@@ -136,7 +136,7 @@
 <script>
 const WORKER_BASE = 'https://steam-proxy.sckwiid.workers.dev';
 
-// Liste de jeux "génériques" pour le jeu du jour
+// Jeux pour "Jeu du jour" (général)
 const ALL_GAMES_POOL = [
   { appid: 730,   name: 'Counter-Strike 2' },
   { appid: 570,   name: 'Dota 2' },
@@ -150,7 +150,7 @@ const ALL_GAMES_POOL = [
   { appid: 252490, name: 'Rust' }
 ];
 
-// Liste de jeux horreur pour la carte horreur
+// Jeux pour "Jeu horreur du jour"
 const HORROR_GAMES_POOL = [
   { appid: 550,    name: 'Left 4 Dead 2' },
   { appid: 238320, name: 'Outlast' },
@@ -160,6 +160,24 @@ const HORROR_GAMES_POOL = [
   { appid: 17470,  name: 'Dead Space' },
   { appid: 418370, name: 'Outlast 2' },
   { appid: 381210, name: 'Dead by Daylight' }
+];
+
+// Pool pour le "Tirage rapide" avec tags pour les catégories
+const QUICK_GAMES_POOL = [
+  { appid: 292030, name: 'The Witcher 3', tags: ['rpg','aventure','openworld','solo','action'] },
+  { appid: 730,    name: 'Counter-Strike 2', tags: ['fps','action','multijoueur'] },
+  { appid: 550,    name: 'Left 4 Dead 2', tags: ['fps','action','horreur','coop','multijoueur','survie'] },
+  { appid: 238320, name: 'Outlast', tags: ['horreur','solo'] },
+  { appid: 381210, name: 'Dead by Daylight', tags: ['horreur','multijoueur','coop','survie'] },
+  { appid: 578080, name: 'PUBG: Battlegrounds', tags: ['fps','action','multijoueur','survie','openworld'] },
+  { appid: 1174180, name: 'Red Dead Redemption 2', tags: ['aventure','action','openworld','rpg','solo'] },
+  { appid: 271590, name: 'Grand Theft Auto V', tags: ['action','openworld','multijoueur'] },
+  { appid: 108600, name: 'Project Zomboid', tags: ['survie','openworld','horreur','multijoueur','coop'] },
+  { appid: 440,   name: 'Team Fortress 2', tags: ['fps','action','multijoueur'] },
+  { appid: 570,   name: 'Dota 2', tags: ['multijoueur'] },
+  { appid: 620,   name: 'Portal 2', tags: ['aventure','coop','solo'] },
+  { appid: 252490, name: 'Rust', tags: ['survie','openworld','multijoueur'] },
+  { appid: 367520, name: 'Hollow Knight', tags: ['action','aventure','solo'] }
 ];
 
 function escapeHtml(s){return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
@@ -206,39 +224,7 @@ function setupModalHandlers() {
   });
 }
 
-/* ---------- Jeu du jour (localStorage) ---------- */
-
-function todayKey() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
-
-function pickRandom(pool) {
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-// Retourne le jeu du jour pour un "mode" (all / horror)
-function getDailyGame(mode, pool) {
-  const key = `sortout-daily-${mode}`;
-  const today = todayKey();
-
-  try {
-    const stored = JSON.parse(localStorage.getItem(key) || 'null');
-    if (stored && stored.date === today && stored.appid) {
-      return stored;
-    }
-  } catch (e) {}
-
-  const g = pickRandom(pool);
-  const entry = { date: today, appid: g.appid, name: g.name };
-  try {
-    localStorage.setItem(key, JSON.stringify(entry));
-  } catch (e) {}
-  return entry;
-}
+/* ---------- Utilitaires Steam ---------- */
 
 async function fetchDetails(appid) {
   try {
@@ -259,6 +245,43 @@ function computePriceText(details) {
     return (details.price_overview.final / 100).toFixed(2) + ' €';
   }
   return 'Payant';
+}
+
+function isGameFree(details) {
+  return !!(details && (details.is_free || (details.price_overview && details.price_overview.final === 0)));
+}
+
+/* ---------- Jeu du jour (localStorage) ---------- */
+
+function todayKey() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function pickRandom(pool) {
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function getDailyGame(mode, pool) {
+  const key = `sortout-daily-${mode}`;
+  const today = todayKey();
+
+  try {
+    const stored = JSON.parse(localStorage.getItem(key) || 'null');
+    if (stored && stored.date === today && stored.appid) {
+      return stored;
+    }
+  } catch (e) {}
+
+  const g = pickRandom(pool);
+  const entry = { date: today, appid: g.appid, name: g.name };
+  try {
+    localStorage.setItem(key, JSON.stringify(entry));
+  } catch (e) {}
+  return entry;
 }
 
 async function renderCard(cardSelector, mode) {
@@ -310,7 +333,6 @@ async function renderCard(cardSelector, mode) {
     </div>
   `;
 
-  // brancher le bouton trailer sur le popup
   if (trailerUrl) {
     const btn = content.querySelector('.btn-trailer');
     if (btn) {
@@ -319,18 +341,18 @@ async function renderCard(cardSelector, mode) {
   }
 }
 
-/* ---------- UI Tirage rapide (juste l’UI pour l’instant) ---------- */
+/* ---------- Tirage rapide : UI catégories ---------- */
 
 function setupQuickUI() {
   const btn = document.getElementById('quick-category-btn');
   const menu = document.getElementById('quick-category-menu');
   if (!btn || !menu) return;
 
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
     menu.classList.toggle('hidden');
   });
 
-  // fermer le menu au clic à l'extérieur
   document.addEventListener('click', (e) => {
     if (!menu.classList.contains('hidden') &&
         !menu.contains(e.target) &&
@@ -340,10 +362,155 @@ function setupQuickUI() {
   });
 }
 
+function getSelectedCategories() {
+  const menu = document.getElementById('quick-category-menu');
+  if (!menu) return [];
+  const checked = menu.querySelectorAll('input[type="checkbox"]:checked');
+  return Array.from(checked).map(c => c.value);
+}
+
+function matchesQuickFilters(game, selectedCats, coopOnly, soloOnly) {
+  const tags = game.tags || [];
+
+  // Filtre catégories : si une ou plusieurs sélectionnées, on veut une intersection
+  if (selectedCats.length > 0) {
+    if (!tags.some(t => selectedCats.includes(t))) return false;
+  }
+
+  // Solo seulement : priorité sur le reste
+  if (soloOnly) {
+    if (!tags.includes('solo')) return false;
+    // On exclut les jeux marqués coop/multi
+    if (tags.includes('coop') || tags.includes('multijoueur')) return false;
+    return true;
+  }
+
+  // Coop / Multi uniquement
+  if (coopOnly) {
+    if (!(tags.includes('coop') || tags.includes('multijoueur'))) return false;
+  }
+
+  return true;
+}
+
+/* ---------- Tirage rapide : logique ---------- */
+
+async function runQuickDraw() {
+  const resultEl = document.getElementById('quick-result');
+  if (!resultEl) return;
+
+  const selectedCats = getSelectedCategories();
+  const coopOnly = document.getElementById('quick-coop-toggle')?.checked || false;
+  const soloOnly = document.getElementById('quick-solo-toggle')?.checked || false;
+  const freeOnly = document.getElementById('quick-free-toggle')?.checked || false;
+
+  const candidates = QUICK_GAMES_POOL.filter(g =>
+    matchesQuickFilters(g, selectedCats, coopOnly, soloOnly)
+  );
+
+  if (candidates.length === 0) {
+    resultEl.innerHTML = `<p class="placeholder">
+      Aucun jeu ne correspond à ces filtres. Ajoute des catégories ou désactive certains toggles.
+    </p>`;
+    return;
+  }
+
+  resultEl.innerHTML = `<p class="placeholder">Recherche d'un jeu compatible avec tes filtres…</p>`;
+
+  let chosenGame = null;
+  let chosenDetails = null;
+
+  // On essaie plusieurs fois de trouver un jeu correspondant au filtre "gratuit"
+  for (let i = 0; i < 25; i++) {
+    const game = pickRandom(candidates);
+    const details = await fetchDetails(game.appid);
+    if (!details) {
+      chosenGame = game;
+      chosenDetails = null;
+      continue;
+    }
+
+    if (freeOnly && !isGameFree(details)) {
+      // pas gratuit, on continue à chercher
+      chosenGame = game;
+      chosenDetails = details;
+      continue;
+    }
+
+    chosenGame = game;
+    chosenDetails = details;
+    break;
+  }
+
+  if (!chosenGame) {
+    resultEl.innerHTML = `<p class="placeholder">
+      Impossible de trouver un jeu pour ce tirage. Réessaie plus tard.
+    </p>`;
+    return;
+  }
+
+  const details = chosenDetails;
+  const priceText = computePriceText(details);
+  const freeFlag = isGameFree(details);
+
+  // Image header
+  let imgHtml = '';
+  if (details && details.header_image) {
+    imgHtml = `<img class="game-header" src="${details.header_image}" alt="Image de ${escapeHtml(chosenGame.name)}">`;
+  }
+
+  // URL trailer (mp4)
+  let trailerUrl = null;
+  if (details && details.movies && details.movies.length) {
+    const vid = details.movies[0];
+    if (vid.mp4) {
+      if (vid.mp4.max) trailerUrl = vid.mp4.max;
+      else {
+        const keys = Object.keys(vid.mp4);
+        if (keys.length) trailerUrl = vid.mp4[keys[0]];
+      }
+    }
+  }
+
+  let infoNote = '';
+  if (freeOnly && !freeFlag) {
+    infoNote = `<br><small>💡 Aucun jeu 100% gratuit n'a été trouvé, celui-ci peut être payant.</small>`;
+  }
+
+  const storeUrl = `https://store.steampowered.com/app/${chosenGame.appid}`;
+
+  resultEl.innerHTML = `
+    <div class="quick-result-card">
+      ${imgHtml}
+      <p><strong>${escapeHtml(chosenGame.name)}</strong></p>
+      <p><small>${escapeHtml(priceText)}</small>${infoNote}</p>
+      <div class="card-actions">
+        <a class="btn btn-sm" href="${storeUrl}" target="_blank" rel="noopener noreferrer">
+          Voir sur Steam
+        </a>
+        ${trailerUrl ? `
+          <button class="btn btn-sm btn-outlined btn-trailer" type="button">
+            Voir le trailer
+          </button>
+        ` : ''}
+      </div>
+    </div>
+  `;
+
+  if (trailerUrl) {
+    const btn = resultEl.querySelector('.btn-trailer');
+    if (btn) {
+      btn.addEventListener('click', () => openTrailer(trailerUrl, chosenGame.name));
+    }
+  }
+}
+
 /* ---------- Init ---------- */
 
 setupModalHandlers();
 setupQuickUI();
+
+document.getElementById('quick-draw-btn')?.addEventListener('click', runQuickDraw);
 
 // Premier affichage des deux cartes du jour
 renderCard('#game-of-day', 'all');
