@@ -44,112 +44,119 @@
 <script>
 const WORKER_BASE = 'https://steam-proxy.sckwiid.workers.dev';
 
-console.log('WORKER_BASE utilisé :', WORKER_BASE);
+// Liste de jeux "génériques" pour le jeu du jour
+const ALL_GAMES_POOL = [
+  { appid: 730,   name: 'Counter-Strike 2' },
+  { appid: 570,   name: 'Dota 2' },
+  { appid: 440,   name: 'Team Fortress 2' },
+  { appid: 620,   name: 'Portal 2' },
+  { appid: 271590, name: 'Grand Theft Auto V' },
+  { appid: 550,   name: 'Left 4 Dead 2' },
+  { appid: 292030, name: 'The Witcher 3' },
+  { appid: 578080, name: 'PUBG: Battlegrounds' },
+  { appid: 359550, name: 'Rainbow Six Siege' },
+  { appid: 252490, name: 'Rust' }
+];
+
+// Liste de jeux horreur pour la carte horreur
+const HORROR_GAMES_POOL = [
+  { appid: 550,    name: 'Left 4 Dead 2' },
+  { appid: 238320, name: 'Outlast' },
+  { appid: 319510, name: 'Layers of Fear' },
+  { appid: 221100, name: 'DayZ' },
+  { appid: 108600, name: 'Project Zomboid' },
+  { appid: 17470,  name: 'Dead Space' },
+  { appid: 418370, name: 'Outlast 2' },
+  { appid: 381210, name: 'Dead by Daylight' }
+];
+
+// Tu peux rajouter / enlever des jeux très facilement :
+// { appid: NUMÉRO_STEAM, name: 'Nom du jeu' }
 
 function escapeHtml(s){return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 
-let catalogCache = null;
-
-async function loadCatalog() {
-  if (catalogCache) return catalogCache;
-  const res = await fetch(WORKER_BASE + '/catalog');
-  if (!res.ok) throw new Error('Worker /catalog HTTP ' + res.status);
-  const data = await res.json();
-  catalogCache = data.apps || [];
-  return catalogCache;
+function pickRandom(pool) {
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
-async function pickRandomGame(tag, freeOnly) {
-  const apps = await loadCatalog();
-  if (!apps.length) throw new Error('Catalogue vide');
-
-  let last = null;
-
-  for (let i = 0; i < 40; i++) {
-    const a = apps[Math.floor(Math.random() * apps.length)];
-    if (!a || !a.appid) continue;
-    last = a;
-
-    // récupère les détails pour connaître prix + genres
-    const detRes = await fetch(`${WORKER_BASE}/appdetails?appid=${a.appid}`);
-    if (!detRes.ok) continue;
-    const det = await detRes.json();
-
-    const obj = det[a.appid] && det[a.appid].data ? det[a.appid].data : (det.data || null);
-    if (!obj) continue;
-
-    // filtre gratuit/payant
-    if (typeof freeOnly === 'boolean') {
-      const isFree = !!obj.is_free || (obj.price_overview && obj.price_overview.final === 0);
-      if (freeOnly && !isFree) continue;
-      if (!freeOnly && isFree) continue;
-    }
-
-    // filtre tag (horreur…)
-    if (tag) {
-      const lcTag = tag.toLowerCase();
-      let matched = false;
-      if (obj.genres) {
-        matched = obj.genres.some(g => (g.description || '').toLowerCase().includes(lcTag));
-      }
-      if (!matched && obj.categories) {
-        matched = obj.categories.some(c => (c.description || '').toLowerCase().includes(lcTag));
-      }
-      if (!matched) continue;
-    }
-
-    // trouvé
-    return { appid: a.appid, name: obj.name, details: obj };
+async function fetchDetails(appid) {
+  try {
+    const res = await fetch(`${WORKER_BASE}/appdetails?appid=${appid}`);
+    if (!res.ok) return null;
+    const det = await res.json();
+    const data = det[appid] && det[appid].data ? det[appid].data : (det.data || null);
+    return data || null;
+  } catch(e) {
+    return null;
   }
-
-  // fallback : dernier tiré, sans garantie de tag/gratuit
-  if (last) {
-    return { appid: last.appid, name: last.name || ('App ' + last.appid), details: null };
-  }
-  throw new Error('Impossible de trouver un jeu correspondant');
 }
 
-function formatPrice(details) {
+function computePriceText(details) {
   if (!details) return 'Prix non disponible';
   if (details.is_free) return 'Gratuit';
-  if (details.price_overview) return (details.price_overview.final / 100).toFixed(2) + ' €';
+  if (details.price_overview) {
+    return (details.price_overview.final / 100).toFixed(2) + ' €';
+  }
   return 'Payant';
 }
 
-async function renderCard(cardSelector, tag) {
+async function renderCard(cardSelector, mode) {
   const card = document.querySelector(cardSelector);
   const content = card.querySelector('.content');
   const freeOnly = document.getElementById('show-free').checked;
 
+  const pool = mode === 'horror' ? HORROR_GAMES_POOL : ALL_GAMES_POOL;
   content.textContent = 'Chargement…';
 
-  try {
-    const { appid, name, details } = await pickRandomGame(tag, freeOnly);
-    const priceText = formatPrice(details);
+  // On essaie plusieurs fois de trouver un jeu qui respecte le filtre "gratuit"
+  let game = null;
+  let details = null;
 
-    content.innerHTML = `
-      <p><strong>${escapeHtml(name)}</strong></p>
-      <p><small>${escapeHtml(priceText)}</small></p>
-      <p><a href="https://store.steampowered.com/app/${appid}" target="_blank">Voir sur Steam</a></p>
-    `;
-  } catch (e) {
-    content.innerHTML = `<small>Erreur : ${escapeHtml(e.message)}</small>`;
+  for (let i = 0; i < 10; i++) {
+    game = pickRandom(pool);
+    details = await fetchDetails(game.appid);
+    if (!details) break; // on affichera au moins le nom
+    const isFree = !!details.is_free || (details.price_overview && details.price_overview.final === 0);
+    if (!freeOnly || isFree) {
+      break;
+    }
   }
+
+  if (!game) {
+    content.innerHTML = '<small>Aucun jeu disponible dans la liste.</small>';
+    return;
+  }
+
+  const priceText = computePriceText(details);
+  const isFree = details && (details.is_free || (details.price_overview && details.price_overview.final === 0));
+
+  // Si "gratuit seulement" est coché mais qu'on n’a pas réussi à en trouver un, on le signale
+  if (freeOnly && !isFree) {
+    content.innerHTML = '<small>Impossible de trouver un jeu gratuit dans la liste actuelle.</small>';
+    return;
+  }
+
+  content.innerHTML = `
+    <p><strong>${escapeHtml(game.name)}</strong></p>
+    <p><small>${escapeHtml(priceText)}</small></p>
+    <p><a href="https://store.steampowered.com/app/${game.appid}" target="_blank">Voir sur Steam</a></p>
+  `;
 }
 
+// écouteurs
 document.getElementById('refresh-game').addEventListener('click', () =>
-  renderCard('#game-of-day', null)
+  renderCard('#game-of-day', 'all')
 );
 document.getElementById('refresh-horror').addEventListener('click', () =>
   renderCard('#horror-of-day', 'horror')
 );
 document.getElementById('show-free').addEventListener('change', () => {
-  renderCard('#game-of-day', null);
+  renderCard('#game-of-day', 'all');
   renderCard('#horror-of-day', 'horror');
 });
 
-// premier chargement
-renderCard('#game-of-day', null);
+// premier affichage
+renderCard('#game-of-day', 'all');
 renderCard('#horror-of-day', 'horror');
 </script>
 </body>
