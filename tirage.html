@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tirage — Tes jeux Steam</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header><h1>Tirage — Tes jeux Steam</h1><a href="index.html">← Accueil</a></header>
+<main>
+  <section>
+    <label>Ton Steam vanity (ex: monpseudo) ou SteamID64 : <input id="vanity" placeholder="vanity ou steamid"></label>
+    <button id="loadLib">Charger ma bibliothèque</button>
+    <p>ou <strong>coller XML</strong> (profil public) dans le textarea ci-dessous si tu refuses l'API :</p>
+    <textarea id="pasteXml" rows="6" placeholder="Coller le XML généré par https://steamcommunity.com/profiles/.../games/?tab=all&xml=1"></textarea>
+    <button id="parseXmlBtn">Importer depuis XML</button>
+    <hr/>
+    <label><input type="checkbox" id="onlyFree"> Jeux gratuits uniquement</label>
+    <div id="libContainer">Aucune bibliothèque chargée</div>
+    <button id="doDraw" disabled>Tirer au sort</button>
+    <div id="result"></div>
+  </section>
+</main>
+
+<script>
+const WORKER_BASE = 'https://ton-worker.workers.dev'; // <- remplace
+const elLib = document.getElementById('libContainer');
+let currentGames = []; // {appid, name, is_free}
+
+async function resolveVanity(v) {
+  const res = await fetch(`${WORKER_BASE}/resolve?vanity=${encodeURIComponent(v)}`);
+  const j = await res.json();
+  if (j.response && j.response.steamid) return j.response.steamid;
+  throw new Error('Impossible de résoudre vanity (profil public requis?)');
+}
+
+async function loadLibraryBySteamId(steamid) {
+  const res = await fetch(`${WORKER_BASE}/library?steamid=${encodeURIComponent(steamid)}`);
+  const j = await res.json();
+  if (j && j.response && j.response.games) {
+    return j.response.games.map(g => ({ appid: g.appid, name: g.name, playtime: g.playtime_forever, is_free: !!g.free }));
+  }
+  throw new Error('Aucune bibliothèque trouvée (profil privé ?)');
+}
+
+document.getElementById('loadLib').addEventListener('click', async ()=>{
+  const v = document.getElementById('vanity').value.trim();
+  if (!v) return alert('Renseigne vanity ou steamid');
+  elLib.textContent = 'Chargement...';
+  try {
+    const steamid = isNaN(Number(v)) ? await resolveVanity(v) : v;
+    const games = await loadLibraryBySteamId(steamid);
+    currentGames = games;
+    renderLib(games);
+  } catch(e) {
+    elLib.textContent = 'Erreur : ' + e.message + '. Utilise le collage XML en fallback.';
+  }
+});
+
+document.getElementById('parseXmlBtn').addEventListener('click', ()=>{
+  const xml = document.getElementById('pasteXml').value;
+  if (!xml) return alert('Colle le XML');
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, 'text/xml');
+    const games = Array.from(doc.querySelectorAll('games game')).map(g=>{
+      return { appid: g.querySelector('appID')?.textContent, name: g.querySelector('name')?.textContent, is_free: false };
+    });
+    currentGames = games;
+    renderLib(games);
+  } catch(e){
+    elLib.textContent = 'Erreur parse XML';
+  }
+});
+
+function renderLib(games) {
+  if (!games.length) { elLib.textContent = 'Aucune jeu.'; document.getElementById('doDraw').disabled = true; return; }
+  elLib.innerHTML = '<p>Sélectionne les jeux à inclure :</p>';
+  const list = document.createElement('div');
+  games.forEach(g=>{
+    const id = 'c_'+g.appid;
+    const row = document.createElement('div');
+    row.innerHTML = `<label><input type="checkbox" id="${id}" data-appid="${g.appid}" checked> ${escapeHtml(g.name)} ${g.is_free? '(Gratuit)':''}</label>`;
+    list.appendChild(row);
+  });
+  elLib.appendChild(list);
+  document.getElementById('doDraw').disabled = false;
+}
+
+function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+document.getElementById('doDraw').addEventListener('click', ()=>{
+  const onlyFree = document.getElementById('onlyFree').checked;
+  const checked = Array.from(elLib.querySelectorAll('input[type=checkbox]')).filter(i=>i.checked);
+  let pool = checked.map(i=> currentGames.find(g=>String(g.appid) === String(i.dataset.appid)));
+  if (onlyFree) pool = pool.filter(p=>p && p.is_free);
+  if (!pool.length) return alert('Aucun jeu sélectionné (ou filtré).');
+  const choice = pool[Math.floor(Math.random()*pool.length)];
+  document.getElementById('result').innerHTML = `<h3>Résultat : ${escapeHtml(choice.name)}</h3>
+    <p><a href="https://store.steampowered.com/app/${choice.appid}" target="_blank">Voir sur Steam</a></p>`;
+});
+</script>
+</body>
+</html>
