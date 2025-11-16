@@ -70,13 +70,43 @@ const HORROR_GAMES_POOL = [
   { appid: 381210, name: 'Dead by Daylight' }
 ];
 
-// Tu peux rajouter / enlever des jeux très facilement :
-// { appid: NUMÉRO_STEAM, name: 'Nom du jeu' }
-
 function escapeHtml(s){return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+
+function todayKey() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 function pickRandom(pool) {
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// Retourne le jeu du jour pour un "mode" (all / horror)
+// stocké dans localStorage, sinon tirage + stockage
+function getDailyGame(mode, pool) {
+  const key = `sortout-daily-${mode}`;
+  const today = todayKey();
+
+  try {
+    const stored = JSON.parse(localStorage.getItem(key) || 'null');
+    if (stored && stored.date === today && stored.appid) {
+      return stored;
+    }
+  } catch (e) {
+    // ignore, on repart de zéro
+  }
+
+  const g = pickRandom(pool);
+  const entry = { date: today, appid: g.appid, name: g.name };
+  try {
+    localStorage.setItem(key, JSON.stringify(entry));
+  } catch (e) {
+    // si localStorage désactivé, tant pis
+  }
+  return entry;
 }
 
 async function fetchDetails(appid) {
@@ -106,39 +136,52 @@ async function renderCard(cardSelector, mode) {
   const freeOnly = document.getElementById('show-free').checked;
 
   const pool = mode === 'horror' ? HORROR_GAMES_POOL : ALL_GAMES_POOL;
+  const game = getDailyGame(mode, pool);
+
   content.textContent = 'Chargement…';
 
-  // On essaie plusieurs fois de trouver un jeu qui respecte le filtre "gratuit"
-  let game = null;
-  let details = null;
-
-  for (let i = 0; i < 10; i++) {
-    game = pickRandom(pool);
-    details = await fetchDetails(game.appid);
-    if (!details) break; // on affichera au moins le nom
-    const isFree = !!details.is_free || (details.price_overview && details.price_overview.final === 0);
-    if (!freeOnly || isFree) {
-      break;
-    }
-  }
-
-  if (!game) {
-    content.innerHTML = '<small>Aucun jeu disponible dans la liste.</small>';
-    return;
-  }
-
+  const details = await fetchDetails(game.appid);
   const priceText = computePriceText(details);
   const isFree = details && (details.is_free || (details.price_overview && details.price_overview.final === 0));
 
-  // Si "gratuit seulement" est coché mais qu'on n’a pas réussi à en trouver un, on le signale
+  // Logo (header_image)
+  let imgHtml = '';
+  if (details && details.header_image) {
+    imgHtml = `<img class="game-header" src="${details.header_image}" alt="Image de ${escapeHtml(game.name)}">`;
+  }
+
+  // Trailer vidéo (première vidéo dispo)
+  let videoHtml = '';
+  if (details && details.movies && details.movies.length) {
+    const vid = details.movies[0];
+    let mp4 = null;
+    if (vid.mp4) {
+      if (vid.mp4.max) mp4 = vid.mp4.max;
+      else {
+        const keys = Object.keys(vid.mp4);
+        if (keys.length) mp4 = vid.mp4[keys[0]];
+      }
+    }
+    if (mp4) {
+      videoHtml = `
+        <video class="game-trailer" controls muted playsinline>
+          <source src="${mp4}" type="video/mp4">
+        </video>`;
+    }
+  }
+
+  // Si l’utilisateur coche "gratuit seulement" mais que le jeu du jour ne l’est pas,
+  // on garde le même jeu et on l’indique juste.
+  let freeNote = '';
   if (freeOnly && !isFree) {
-    content.innerHTML = '<small>Impossible de trouver un jeu gratuit dans la liste actuelle.</small>';
-    return;
+    freeNote = `<br><small>💡 Le jeu du jour n'est pas gratuit aujourd'hui.</small>`;
   }
 
   content.innerHTML = `
+    ${imgHtml}
     <p><strong>${escapeHtml(game.name)}</strong></p>
-    <p><small>${escapeHtml(priceText)}</small></p>
+    <p><small>${escapeHtml(priceText)}</small>${freeNote}</p>
+    ${videoHtml}
     <p><a href="https://store.steampowered.com/app/${game.appid}" target="_blank">Voir sur Steam</a></p>
   `;
 }
