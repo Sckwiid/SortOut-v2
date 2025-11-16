@@ -130,7 +130,7 @@ nav a:hover {
 
 /* Popup trailer */
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .modal {
