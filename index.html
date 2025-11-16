@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SortOut — Accueil</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>SortOut</h1>
+  <nav>
+    <a href="index.html">Accueil</a>
+    <a href="tirage.html">Tirage depuis tes jeux Steam</a>
+    <a href="classic.html">Tirage classique</a>
+    <a href="thematic.html">Tirage thématique</a>
+  </nav>
+</header>
+
+<main>
+  <section id="daily">
+    <div class="card" id="game-of-day">
+      <h2>🎮 Jeu du jour</h2>
+      <div class="content">Chargement…</div>
+      <button id="refresh-game">Rafraîchir</button>
+    </div>
+
+    <div class="card" id="horror-of-day">
+      <h2>👻 Jeu horreur du jour</h2>
+      <div class="content">Chargement…</div>
+      <button id="refresh-horror">Rafraîchir</button>
+    </div>
+  </section>
+
+  <section id="actions">
+    <a class="big-btn" href="tirage.html">Tirage depuis tes jeux Steam</a>
+    <div class="toggles">
+      <label><input type="checkbox" id="show-free" /> Afficher gratuit seulement</label>
+    </div>
+  </section>
+</main>
+
+<script>
+const WORKER_BASE = 'https://ton-worker.workers.dev'; // <- remplace par ton Worker URL
+
+async function loadRandom(tag, free) {
+  const q = new URL(WORKER_BASE + '/random');
+  if (tag) q.searchParams.set('tag', tag);
+  if (free !== undefined) q.searchParams.set('free', free ? '1' : '0');
+  const res = await fetch(q);
+  if (!res.ok) throw new Error('worker error');
+  return res.json();
+}
+
+async function renderCard(selector, tag, free) {
+  const el = document.querySelector(selector + ' .content');
+  el.textContent = 'Chargement...';
+  try {
+    const data = await loadRandom(tag, free);
+    const app = data.appid ? data : data.fallback ? { fallback: data.fallback } : data;
+    if (app.appid || app.fallback) {
+      const id = app.appid || app.fallback.appid;
+      const name = (app.appid && app.name) || (app.fallback && app.fallback.name) || 'Jeu inconnu';
+      // fetch appdetails to get price
+      const det = await fetch(`${WORKER_BASE}/appdetails?appid=${id}`).then(r=>r.json()).catch(()=>null);
+      let priceText = 'Prix non disponible';
+      try {
+        const detObj = det[id] && det[id].data ? det[id].data : det && det.data ? det.data : null;
+        if (detObj) {
+          if (detObj.is_free) priceText = 'Gratuit';
+          else if (detObj.price_overview) priceText = (detObj.price_overview.final / 100).toFixed(2) + ' €';
+          else priceText = 'Payant';
+        }
+      } catch(e){}
+      el.innerHTML = `<strong>${escapeHtml(name)}</strong><p>${priceText}</p>
+        <p><a href="https://store.steampowered.com/app/${id}" target="_blank">Voir sur le Store</a></p>`;
+    } else {
+      el.textContent = 'Aucun résultat';
+    }
+  } catch(e) {
+    el.textContent = 'Erreur : ' + e.message + '. Si problème, utilises la page tirage (import manuel).';
+  }
+}
+
+function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+document.getElementById('refresh-game').addEventListener('click', ()=>renderCard('#game-of-day', null, document.getElementById('show-free').checked));
+document.getElementById('refresh-horror').addEventListener('click', ()=>renderCard('#horror-of-day', 'horror', document.getElementById('show-free').checked));
+
+document.getElementById('show-free').addEventListener('change', ()=>{
+  renderCard('#game-of-day', null, document.getElementById('show-free').checked);
+  renderCard('#horror-of-day', 'horror', document.getElementById('show-free').checked);
+});
+
+// initial load
+renderCard('#game-of-day', null, false);
+renderCard('#horror-of-day', 'horror', false);
+</script>
+</body>
+</html>
