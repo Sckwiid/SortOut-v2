@@ -1,104 +1,163 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tirage — Tes jeux Steam</title>
-<link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8">
+  <title>Tirage — Tes jeux Steam</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header><h1>Tirage — Tes jeux Steam</h1><a href="index.html">← Accueil</a></header>
-<main>
-  <section>
-    <label>Ton Steam vanity (ex: monpseudo) ou SteamID64 : <input id="vanity" placeholder="vanity ou steamid"></label>
-    <button id="loadLib">Charger ma bibliothèque</button>
-    <p>ou <strong>coller XML</strong> (profil public) dans le textarea ci-dessous si tu refuses l'API :</p>
-    <textarea id="pasteXml" rows="6" placeholder="Coller le XML généré par https://steamcommunity.com/profiles/.../games/?tab=all&xml=1"></textarea>
-    <button id="parseXmlBtn">Importer depuis XML</button>
-    <hr/>
-    <label><input type="checkbox" id="onlyFree"> Jeux gratuits uniquement</label>
-    <div id="libContainer">Aucune bibliothèque chargée</div>
-    <button id="doDraw" disabled>Tirer au sort</button>
-    <div id="result"></div>
-  </section>
-</main>
+<div class="page">
+  <header>
+    <h1>Tirage — Tes jeux Steam</h1>
+    <a href="index.html" class="link-back">← Accueil</a>
+  </header>
+
+  <main>
+    <section class="card">
+      <p>
+        <label>
+          Ton Steam vanity (ex: monpseudo) ou SteamID64 :
+          <input type="text" id="vanity" placeholder="vanity ou steamid">
+        </label>
+        <button class="btn btn-outlined" id="loadLib">Charger ma bibliothèque</button>
+      </p>
+      <p><small>Ton profil doit être <strong>public</strong> pour que Steam renvoie tes jeux.</small></p>
+
+      <hr>
+
+      <label class="toggle">
+        <input type="checkbox" id="onlyFree">
+        Tirer uniquement parmi les jeux gratuits
+      </label>
+
+      <div id="libContainer">Aucune bibliothèque chargée.</div>
+
+      <button class="btn" id="doDraw" disabled>🎲 Tirer au sort</button>
+      <div id="result"></div>
+    </section>
+  </main>
+</div>
 
 <script>
-const WORKER_BASE = 'https://steam-proxy.sckwiid.workers.dev/'; // <- remplace
+const WORKER_BASE = 'https://TON-WORKER.workers.dev'; // ⚠️ remplace
+
 const elLib = document.getElementById('libContainer');
-let currentGames = []; // {appid, name, is_free}
+const elResult = document.getElementById('result');
+let currentGames = []; // {appid, name}
+
+function escapeHtml(s){return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 
 async function resolveVanity(v) {
   const res = await fetch(`${WORKER_BASE}/resolve?vanity=${encodeURIComponent(v)}`);
+  if (!res.ok) throw new Error('Worker HTTP ' + res.status);
   const j = await res.json();
   if (j.response && j.response.steamid) return j.response.steamid;
-  throw new Error('Impossible de résoudre vanity (profil public requis?)');
+  throw new Error('Impossible de résoudre ce vanity (profil public ?)');
 }
 
-async function loadLibraryBySteamId(steamid) {
+async function loadLibrary(steamid) {
   const res = await fetch(`${WORKER_BASE}/library?steamid=${encodeURIComponent(steamid)}`);
+  if (!res.ok) throw new Error('Worker HTTP ' + res.status);
   const j = await res.json();
-  if (j && j.response && j.response.games) {
-    return j.response.games.map(g => ({ appid: g.appid, name: g.name, playtime: g.playtime_forever, is_free: !!g.free }));
-  }
-  throw new Error('Aucune bibliothèque trouvée (profil privé ?)');
+  if (!j.response || !j.response.games) throw new Error('Aucun jeu trouvé (profil privé ?)');
+  return j.response.games.map(g => ({
+    appid: g.appid,
+    name: g.name || ('App ' + g.appid)
+  }));
 }
 
-document.getElementById('loadLib').addEventListener('click', async ()=>{
-  const v = document.getElementById('vanity').value.trim();
-  if (!v) return alert('Renseigne vanity ou steamid');
-  elLib.textContent = 'Chargement...';
-  try {
-    const steamid = isNaN(Number(v)) ? await resolveVanity(v) : v;
-    const games = await loadLibraryBySteamId(steamid);
-    currentGames = games;
-    renderLib(games);
-  } catch(e) {
-    elLib.textContent = 'Erreur : ' + e.message + '. Utilise le collage XML en fallback.';
+function renderLibrary(games) {
+  if (!games.length) {
+    elLib.textContent = 'Aucun jeu dans la bibliothèque.';
+    document.getElementById('doDraw').disabled = true;
+    return;
   }
-});
-
-document.getElementById('parseXmlBtn').addEventListener('click', ()=>{
-  const xml = document.getElementById('pasteXml').value;
-  if (!xml) return alert('Colle le XML');
-  try {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(xml, 'text/xml');
-    const games = Array.from(doc.querySelectorAll('games game')).map(g=>{
-      return { appid: g.querySelector('appID')?.textContent, name: g.querySelector('name')?.textContent, is_free: false };
-    });
-    currentGames = games;
-    renderLib(games);
-  } catch(e){
-    elLib.textContent = 'Erreur parse XML';
-  }
-});
-
-function renderLib(games) {
-  if (!games.length) { elLib.textContent = 'Aucune jeu.'; document.getElementById('doDraw').disabled = true; return; }
-  elLib.innerHTML = '<p>Sélectionne les jeux à inclure :</p>';
-  const list = document.createElement('div');
-  games.forEach(g=>{
-    const id = 'c_'+g.appid;
-    const row = document.createElement('div');
-    row.innerHTML = `<label><input type="checkbox" id="${id}" data-appid="${g.appid}" checked> ${escapeHtml(g.name)} ${g.is_free? '(Gratuit)':''}</label>`;
-    list.appendChild(row);
+  const container = document.createElement('div');
+  games.forEach(g => {
+    const div = document.createElement('div');
+    div.className = 'game-row';
+    const id = 'g_' + g.appid;
+    div.innerHTML = `
+      <label>
+        <input type="checkbox" id="${id}" data-appid="${g.appid}" checked>
+        ${escapeHtml(g.name)}
+      </label>`;
+    container.appendChild(div);
   });
-  elLib.appendChild(list);
+  elLib.innerHTML = '';
+  elLib.appendChild(container);
   document.getElementById('doDraw').disabled = false;
 }
 
-function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+document.getElementById('loadLib').addEventListener('click', async () => {
+  const v = document.getElementById('vanity').value.trim();
+  if (!v) return alert('Renseigne ton vanity ou SteamID64.');
 
-document.getElementById('doDraw').addEventListener('click', ()=>{
+  elLib.textContent = 'Chargement…';
+  elResult.innerHTML = '';
+
+  try {
+    const steamid = isNaN(Number(v)) ? await resolveVanity(v) : v;
+    const games = await loadLibrary(steamid);
+    currentGames = games;
+    renderLibrary(games);
+  } catch (e) {
+    elLib.innerHTML = `<small>Erreur : ${escapeHtml(e.message)}.<br>
+      Vérifie que ton profil est public et que l’URL WORKER_BASE est correcte.</small>`;
+    document.getElementById('doDraw').disabled = true;
+  }
+});
+
+async function drawOne(pool, onlyFree) {
+  if (!onlyFree) {
+    const g = pool[Math.floor(Math.random() * pool.length)];
+    return { game: g, priceText: null };
+  }
+
+  // si onlyFree: on essaie plusieurs fois jusqu'à tomber sur un jeu gratuit
+  for (let i = 0; i < 20; i++) {
+    const g = pool[Math.floor(Math.random() * pool.length)];
+    try {
+      const res = await fetch(`${WORKER_BASE}/appdetails?appid=${g.appid}`);
+      if (!res.ok) continue;
+      const det = await res.json();
+      const obj = det[g.appid] && det[g.appid].data ? det[g.appid].data : (det.data || null);
+      if (!obj) continue;
+      const isFree = !!obj.is_free || (obj.price_overview && obj.price_overview.final === 0);
+      const priceText = isFree ? 'Gratuit' :
+        obj.price_overview ? (obj.price_overview.final / 100).toFixed(2) + ' €' : 'Payant';
+      if (isFree) return { game: g, priceText };
+    } catch (_) {}
+  }
+
+  // fallback : n'importe quel jeu
+  const g = pool[Math.floor(Math.random() * pool.length)];
+  return { game: g, priceText: null };
+}
+
+document.getElementById('doDraw').addEventListener('click', async () => {
+  const checkboxes = Array.from(elLib.querySelectorAll('input[type="checkbox"]'))
+    .filter(c => c.checked);
+  if (!checkboxes.length) {
+    alert('Sélectionne au moins un jeu.');
+    return;
+  }
+
+  const pool = checkboxes.map(c =>
+    currentGames.find(g => String(g.appid) === String(c.dataset.appid))
+  ).filter(Boolean);
+
   const onlyFree = document.getElementById('onlyFree').checked;
-  const checked = Array.from(elLib.querySelectorAll('input[type=checkbox]')).filter(i=>i.checked);
-  let pool = checked.map(i=> currentGames.find(g=>String(g.appid) === String(i.dataset.appid)));
-  if (onlyFree) pool = pool.filter(p=>p && p.is_free);
-  if (!pool.length) return alert('Aucun jeu sélectionné (ou filtré).');
-  const choice = pool[Math.floor(Math.random()*pool.length)];
-  document.getElementById('result').innerHTML = `<h3>Résultat : ${escapeHtml(choice.name)}</h3>
-    <p><a href="https://store.steampowered.com/app/${choice.appid}" target="_blank">Voir sur Steam</a></p>`;
+  elResult.innerHTML = '<small>Tirage en cours…</small>';
+
+  const { game, priceText } = await drawOne(pool, onlyFree);
+  const price = priceText ? ` (${priceText})` : '';
+
+  elResult.innerHTML = `
+    <h3>Résultat : ${escapeHtml(game.name)}${escapeHtml(price)}</h3>
+    <p><a href="https://store.steampowered.com/app/${game.appid}" target="_blank">Voir sur Steam</a></p>
+  `;
 });
 </script>
 </body>
