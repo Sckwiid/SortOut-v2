@@ -6,6 +6,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="styles.css">
 </head>
+<div id="trailer-modal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-dialog">
+    <button class="modal-close" aria-label="Fermer">×</button>
+    <h3 id="modal-title">Trailer</h3>
+    <video id="modal-video" controls autoplay muted playsinline></video>
+  </div>
+</div>
 <body>
 <div class="page">
   <header>
@@ -17,28 +25,26 @@
   </header>
 
   <main>
-    <div class="cards-row">
-      <div class="card" id="game-of-day">
-        <h2>🎮 Jeu du jour</h2>
-        <div class="content">Chargement…</div>
-        <button class="btn btn-outlined" id="refresh-game">Rafraîchir</button>
-      </div>
-
-      <div class="card" id="horror-of-day">
-        <h2>👻 Jeu horreur du jour</h2>
-        <div class="content">Chargement…</div>
-        <button class="btn btn-outlined" id="refresh-horror">Rafraîchir</button>
-      </div>
+  <div class="cards-row">
+    <div class="card" id="game-of-day">
+      <h2>🎮 Jeu du jour</h2>
+      <div class="content">Chargement…</div>
     </div>
 
-    <div class="main-actions">
-      <a href="tirage.html" class="btn">🎲 Tirage depuis tes jeux Steam</a>
-      <label class="toggle">
-        <input type="checkbox" id="show-free">
-        Afficher uniquement les jeux gratuits
-      </label>
+    <div class="card" id="horror-of-day">
+      <h2>👻 Jeu horreur du jour</h2>
+      <div class="content">Chargement…</div>
     </div>
-  </main>
+  </div>
+
+  <div class="main-actions">
+    <a href="tirage.html" class="btn">🎲 Tirage depuis tes jeux Steam</a>
+    <label class="toggle">
+      <input type="checkbox" id="show-free">
+      Afficher uniquement les jeux gratuits
+    </label>
+  </div>
+</main>
 </div>
 
 <script>
